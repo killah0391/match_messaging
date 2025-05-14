@@ -1,0 +1,10 @@
+# match_messaging/match_messaging.info.yml
+
+name: 'Match Messaging'
+type: module
+description: 'Provides private messaging functionality between users.'
+package: Custom
+core_version_requirement: ^10
+dependencies:
+  - drupal:user # Core user module
+  - user_match:user_match # Dependency on your User Match module

@@ -1,0 +1,12 @@
+# match_messaging/match_messaging.permissions.yml
+
+access match messaging:
+  title: 'Access Match Messaging'
+  description: 'Allows users to view their message threads and send messages.'
+
+administer match messaging entities:
+  title: 'Administer Match Messaging entities'
+  description: 'Allow to access the administration form to configure Match Messaging entities.'
+  restrict access: true # Typically restricted to administrators
+
+# Add more granular permissions if needed (e.g., delete own messages)

@@ -1,0 +1,100 @@
+{#
+/**
+ * @file
+ * Default theme implementation for a match_message entity.
+ *
+ * Available variables:
+ * - content: A list of content items. Use 'content' to print all content, or
+ * print a subset such as 'content.field_example'. See
+ * core/modules/node/templates/node.html.twig for more examples.
+ * - attributes: HTML attributes for the wrapper.
+ * - view_mode: View mode; for example, "full", "teaser", etc.
+ * - message: The Match Message entity.
+ * - url: Direct URL of the message entity if available. Non-functional link in this context.
+ * - is_current_user: Boolean indicating if the message sender is the current user. (Added in preprocess)
+ *
+ * @see template_preprocess_match_message()
+ * @see match_messaging_preprocess_match_message()
+ */
+#}
+{# Add classes from preprocess and potentially view_mode #}
+<article{{ attributes.addClass('message-wrapper', view_mode ? view_mode|clean_class) }}>
+
+  {# Render all fields defined in the 'full' view mode display config #}
+  {# The layout (e.g., sender above/below message) depends on field weights #}
+  <div class="message-container">
+    <div class="message-sender">
+      {{content.sender}}
+      </div>
+<div class="message-body">
+	{{content.body}}
+</div>
+    <div class="message-time">
+      {{content.created}}
+      </div>
+      {{content.image}}
+
+</article>
+
+{# Add specific CSS for messages here or in your theme's CSS file #}
+<style>
+.chat-message {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 15px;
+  max-width: 75%;
+  word-wrap: break-word; /* Ensure long words break */
+  clear: both; /* Ensure messages don't overlap weirdly if floated */
+}
+
+.chat-message.sent {
+  background-color: #dcf8c6; /* Light green for sent */
+  margin-left: auto; /* Align right */
+  float: right; /* Float right */
+  border-bottom-right-radius: 5px; /* Adjust corner */
+}
+
+.chat-message.received {
+  background-color: #ffffff; /* White for received */
+  border: 1px solid #eee;
+  margin-right: auto; /* Align left */
+  float: left; /* Float left */
+   border-bottom-left-radius: 5px; /* Adjust corner */
+}
+
+/* Clear floats after each message block if needed */
+.chat-message::after {
+    content: "";
+    clear: both;
+    display: table;
+}
+
+
+/* Styling for fields within the message (adjust field names if needed) */
+.chat-message .field--name-sender {
+  font-weight: bold;
+  font-size: 0.9em;
+  margin-bottom: 3px;
+  color: #555;
+}
+.chat-message.sent .field--name-sender {
+    /* Maybe hide sender for own messages? */
+    /* display: none; */
+}
+
+.chat-message .field--name-body p {
+   margin: 0; /* Remove default paragraph margin */
+   line-height: 1.4;
+}
+
+.chat-message .field--name-created {
+  font-size: 0.8em;
+  color: #999;
+  margin-top: 4px;
+  text-align: right; /* Align timestamp right within the bubble */
+}
+.chat-message.received .field--name-created {
+   text-align: left; /* Align timestamp left for received */
+}
+
+</style>

@@ -1,0 +1,64 @@
+# match_messaging/match_messaging.routing.yml
+
+match_messaging.chat_start:
+  path: '/chat/start/{user}'
+  defaults:
+    _controller: '\Drupal\match_messaging\Controller\ChatController::startChat'
+    _title: 'Start Chat'
+  requirements:
+    _permission: 'access match messaging'
+    user: \d+ # Ensure {user} is a numeric user ID
+  options:
+    parameters:
+      user:
+        type: entity:user # Automatically load the User entity
+
+match_messaging.thread_view:
+  path: '/chat/thread/{thread_uuid}'
+  defaults:
+    _controller: '\Drupal\match_messaging\Controller\ChatController::viewThread'
+    _title: 'Chat Thread' # Title can be overridden in the controller
+  requirements:
+    # Access check will be handled within the controller for participant validation
+    _permission: 'access match messaging'
+    thread_uuid: '[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}' # Validate UUID format
+  options:
+    parameters:
+      # We'll load the thread manually in the controller based on UUID
+      thread_uuid:
+        type: string
+
+# Optional: Define entity canonical routes if you want standard entity pages
+# entity.match_thread.canonical:
+#   path: '/match_thread/{match_thread}'
+#   defaults:
+#     _entity_view: 'match_thread.full'
+#     _title_callback: '\Drupal\Core\Entity\Controller\EntityController::title'
+#   requirements:
+#     _entity_access: 'match_thread.view' # Requires defining access handlers or using hooks
+#
+# entity.match_message.canonical:
+#   path: '/match_message/{match_message}'
+#   defaults:
+#     _entity_view: 'match_message.full'
+#     _title_callback: '\Drupal\Core\Entity\Controller\EntityController::title'
+#   requirements:
+#     _entity_access: 'match_message.view' # Requires defining access handlers or using hooks
+
+
+entity.match_message.canonical:
+  path: '/match_message/{match_message}'
+  defaults:
+    # Using _entity_view requires a view builder and potentially access control.
+    # For Field UI purposes only, a simpler controller might suffice,
+    # but let's try with _entity_view first.
+    _entity_view: 'match_message.full'
+    _title_callback: '\Drupal\Core\Entity\Controller\EntityController::title'
+  requirements:
+    # Define basic access based on admin permission for now.
+    # Proper view access might need custom logic or hook_entity_access.
+    _permission: 'administer match messaging entities' # Restrict direct view for now
+  options:
+    parameters:
+      match_message:
+        type: entity:match_message

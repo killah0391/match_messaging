@@ -1,0 +1,8 @@
+match-messaging-chat:
+  version: 1.x
+  js:
+    js/match-messaging-chat.js: {}
+  dependencies:
+    - core/jquery
+    - core/drupal
+    - core/once # For ensuring behaviors attach once

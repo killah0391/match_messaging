@@ -1,0 +1,223 @@
+<?php
+
+/**
+ * @file
+ * Contains match_messaging.module.
+ */
+
+use Drupal\Core\Access\AccessResult;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Session\AccountInterface;
+use Drupal\file\FileInterface;
+use Drupal\user\UserInterface;
+
+/**
+ * Implements hook_theme().
+ */
+function match_messaging_theme($existing, $type, $theme, $path)
+{
+  return [
+    'chat_thread' => [
+      'render element' => 'elements',
+      'variables' => [
+        'thread' => NULL,
+        'messages' => [],
+        'form' => NULL,
+        'current_user_id' => NULL,
+      ],
+      'template' => 'chat-thread',
+      // Assumes templates are in a 'templates' subdirectory of the module.
+      'path' => $path . '/templates',
+    ],
+    'match_message' => [
+      'render element' => 'elements',
+      'template' => 'match-message',
+      // Assumes templates are in a 'templates' subdirectory of the module.
+      'path' => $path . '/templates',
+    ],
+    'message_form' => [
+      'render element' => 'form',
+      // You can also specify variables to be passed to the template here if needed,
+      // but often form elements are passed directly.
+      // 'variables' => ['my_variable' => NULL],
+    ],
+  ];
+}
+
+/**
+ * Implements hook_preprocess_HOOK() for match_message.
+ *
+ * Adds CSS classes based on whether the message is from the current user.
+ */
+function match_messaging_preprocess_match_message(&$variables)
+{
+  /** @var \Drupal\match_messaging\Entity\Message $message */
+  $message = $variables['elements']['#match_message'];
+  $current_user_id = \Drupal::currentUser()->id();
+
+  // Determine if the sender is the current user
+  $sender_id = NULL;
+  if ($message instanceof EntityInterface && !$message->get('sender')->isEmpty()) {
+    $sender_id = $message->get('sender')->target_id;
+  }
+  $variables['is_current_user'] = ($sender_id == $current_user_id);
+
+  // Add CSS classes for styling.
+  $variables['attributes']['class'][] = 'chat-message';
+  $variables['attributes']['class'][] = $variables['is_current_user'] ? 'sent' : 'received';
+
+  // Initialize content if it doesn't exist (it shouldn't normally be needed)
+  if (!isset($variables['content'])) {
+    $variables['content'] = [];
+  }
+
+  // Iterate over the elements passed from the view builder
+  // and explicitly move the renderable field arrays into 'content'.
+  // We skip known internal properties starting with '#'.
+  foreach ($variables['elements'] as $key => $element) {
+    if (is_string($key) && strpos($key, '#') !== 0) {
+      // If the element for this key (e.g., 'body', 'sender') exists
+      // and isn't already in 'content', add it.
+      if (!isset($variables['content'][$key])) {
+        $variables['content'][$key] = $element;
+      }
+      // Hide the original top-level element to avoid double rendering
+      // if the template were to somehow iterate over $variables['elements'].
+      // This might not be strictly necessary but is safer.
+      $variables['elements'][$key]['#printed'] = TRUE;
+    }
+  }
+
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_access() for match_message entities.
+ *
+ * Grants 'view' access to messages for participants of the thread.
+ */
+function match_messaging_match_message_access(EntityInterface $entity, $operation, AccountInterface $account)
+{
+  /** @var \Drupal\match_messaging\Entity\Message $message */
+  $message = $entity;
+
+  if ($operation === 'view') {
+
+    /** @var \Drupal\match_messaging\Entity\Thread|null $thread */
+    $thread = $message->get('thread_id')->entity;
+
+    if ($thread) {
+      // Load the full user object for the account performing the access check.
+      $user_entity_storage = \Drupal::entityTypeManager()->getStorage('user');
+      $user_entity = $user_entity_storage->load($account->id());
+
+      // isParticipant() in Thread entity now checks user1 and user2 fields.
+      if ($user_entity instanceof UserInterface && $thread->isParticipant($user_entity)) {
+        return AccessResult::allowed()->cachePerPermissions()->addCacheableDependency($thread)->addCacheableDependency($message);
+      }
+    }
+  }
+  return AccessResult::neutral();
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_access() for match_thread entities.
+ *
+ * Grants 'view' access to threads for their participants (user1 or user2).
+ */
+function match_messaging_match_thread_access(EntityInterface $entity, $operation, AccountInterface $account)
+{
+  /** @var \Drupal\match_messaging\Entity\Thread $thread */
+  $thread = $entity;
+
+  // Grant 'view' access to participants of the thread.
+  if ($operation === 'view') {
+
+    // Load the full user object for the account performing the access check.
+    $user_entity_storage = \Drupal::entityTypeManager()->getStorage('user');
+    $user_entity = $user_entity_storage->load($account->id());
+
+    // isParticipant() in Thread entity now checks user1 and user2 fields.
+    if ($user_entity instanceof UserInterface && $thread->isParticipant($user_entity)) {
+      return AccessResult::allowed()->cachePerUser()->addCacheableDependency($thread)->addCacheableDependency($thread);
+    }
+  }
+
+  return AccessResult::neutral();
+}
+
+
+/**
+ * Implements hook_file_download().
+ *
+ * Controls access to private files associated with match_message entities.
+ * Only participants of the thread (user1 or user2) to which the message
+ * belongs should be able to download/view the file.
+ */
+function match_messaging_file_download($uri)
+{
+
+  $current_user_account = \Drupal::currentUser();
+  $current_user_id = $current_user_account->id();
+
+
+  $current_user_entity = \Drupal::entityTypeManager()->getStorage('user')->load($current_user_id);
+
+  if (!$current_user_entity instanceof UserInterface) {
+
+    return -1;
+  }
+
+  if (strpos($uri, 'private://chat_images/') !== 0) {
+
+    return NULL;
+  }
+
+  $files = \Drupal::entityTypeManager()->getStorage('file')->loadByProperties(['uri' => $uri]);
+  if (empty($files)) {
+
+    return -1;
+  }
+  /** @var \Drupal\file\FileInterface $file */
+  $file = reset($files);
+  $file_id = $file->id();
+
+
+  $message_storage = \Drupal::entityTypeManager()->getStorage('match_message');
+  $query = $message_storage->getQuery()
+    ->accessCheck(FALSE) // We are doing our own access check here.
+    ->condition('image.target_id', $file_id)
+    ->range(0, 1);
+  $message_ids = $query->execute();
+
+  if (empty($message_ids)) {
+
+    return -1;
+  }
+  $message_id = reset($message_ids);
+  /** @var \Drupal\match_messaging\Entity\Message $message */
+  $message = $message_storage->load($message_id);
+
+  if (!$message) {
+
+    return -1;
+  }
+
+
+  /** @var \Drupal\match_messaging\Entity\Thread|null $thread */
+  $thread = $message->get('thread_id')->entity;
+
+  if (!$thread) {
+
+    return -1;
+  }
+
+
+  // isParticipant() in Thread entity now checks user1 and user2 fields.
+  if ($thread->isParticipant($current_user_entity)) {
+
+    return []; // Returning an empty array grants access.
+  } else {
+
+    return -1;
+  }
+}
